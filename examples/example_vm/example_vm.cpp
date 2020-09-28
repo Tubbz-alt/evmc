@@ -17,16 +17,16 @@
 
 
 /// The example VM instance struct extending the evmc_vm.
-struct example_vm
+struct example_vm : evmc_vm
 {
-    evmc_vm instance;  ///< The base struct.
-    int verbose;       ///< The verbosity level.
+    int verbose = 0;  ///< The verbosity level.
+    example_vm();     ///< Constructor to initialize the evmc_vm struct.
 };
 
 /// The implementation of the evmc_vm::destroy() method.
 static void destroy(evmc_vm* vm)
 {
-    delete (struct example_vm*)vm;
+    delete static_cast<example_vm*>(vm);
 }
 
 /// The example implementation of the evmc_vm::get_capabilities() method.
@@ -214,17 +214,12 @@ static struct evmc_result execute(struct evmc_vm* instance,
 #endif
 /// @endcond
 
+example_vm::example_vm()
+  : evmc_vm{EVMC_ABI_VERSION, "example_vm",       PROJECT_VERSION, ::destroy,
+            ::execute,        ::get_capabilities, ::set_option}
+{}
+
 struct evmc_vm* evmc_create_example_vm()
 {
-    example_vm* vm = new example_vm{evmc_vm{
-                                        EVMC_ABI_VERSION,
-                                        "example_vm",
-                                        PROJECT_VERSION,
-                                        destroy,
-                                        execute,
-                                        get_capabilities,
-                                        set_option,
-                                    },
-                                    0};
-    return &vm->instance;
+    return new example_vm;
 }
