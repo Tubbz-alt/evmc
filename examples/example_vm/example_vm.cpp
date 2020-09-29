@@ -42,7 +42,7 @@ static enum evmc_set_option_result set_option(evmc_vm* instance,
                                               const char* name,
                                               const char* value)
 {
-    example_vm* vm = (example_vm*)instance;
+    example_vm* vm = static_cast<example_vm*>(instance);
     if (strcmp(name, "verbose") == 0)
     {
         if (!value)
@@ -91,7 +91,7 @@ static evmc_result execute(evmc_vm* instance,
         return ret;
     }
 
-    example_vm* vm = (example_vm*)instance;
+    example_vm* vm = static_cast<example_vm*>(instance);
 
     // Simulate executing by checking for some code patterns.
     // Solidity inline assembly is used in the examples instead of EVM bytecode.
