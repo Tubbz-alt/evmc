@@ -10,9 +10,9 @@
 /// and is done in simple C++ for readability.
 
 #include "example_vm.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 
 /// The example VM instance struct extending the evmc_vm.
@@ -45,11 +45,11 @@ static enum evmc_set_option_result set_option(evmc_vm* instance,
     example_vm* vm = static_cast<example_vm*>(instance);
     if (strcmp(name, "verbose") == 0)
     {
-        if (!value)
+        if (value == nullptr)
             return EVMC_SET_OPTION_INVALID_VALUE;
 
-        char* end = NULL;
-        long int v = strtol(value, &end, 0);
+        char* end = nullptr;
+        long int v = std::strtol(value, &end, 0);
         if (end == value)  // Parsing the value failed.
             return EVMC_SET_OPTION_INVALID_VALUE;
         if (v > 9 || v < -1)  // Not in the valid range.
@@ -87,7 +87,7 @@ static evmc_result execute(evmc_vm* instance,
         ret.output_size = strlen(error);
         ret.status_code = EVMC_FAILURE;
         ret.gas_left = msg->gas / 10;
-        ret.release = NULL;  // We don't need to release the constant messages.
+        ret.release = nullptr;  // We don't need to release the constant messages.
         return ret;
     }
 
@@ -186,8 +186,7 @@ static evmc_result execute(evmc_vm* instance,
     else if (code_size == (sizeof(make_a_call) - 1) &&
              strncmp((const char*)code, make_a_call, code_size) == 0)
     {
-        evmc_message call_msg;
-        memset(&call_msg, 0, sizeof(call_msg));
+        evmc_message call_msg{};
         call_msg.kind = EVMC_CALL;
         call_msg.depth = msg->depth + 1;
         call_msg.gas = msg->gas - (msg->gas / 64);
