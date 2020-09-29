@@ -10,7 +10,6 @@
 /// and is done in simple C++ for readability.
 
 #include "example_vm.h"
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,9 +29,8 @@ static void destroy(evmc_vm* vm)
 }
 
 /// The example implementation of the evmc_vm::get_capabilities() method.
-static evmc_capabilities_flagset get_capabilities(struct evmc_vm* vm)
+static evmc_capabilities_flagset get_capabilities(evmc_vm* /*instance*/)
 {
-    (void)vm;
     return EVMC_CAPABILITY_EVM1 | EVMC_CAPABILITY_EWASM;
 }
 
@@ -40,11 +38,11 @@ static evmc_capabilities_flagset get_capabilities(struct evmc_vm* vm)
 ///
 /// The implementation of the evmc_vm::set_option() method.
 /// VMs are allowed to omit this method implementation.
-static enum evmc_set_option_result set_option(struct evmc_vm* instance,
+static enum evmc_set_option_result set_option(evmc_vm* instance,
                                               const char* name,
                                               const char* value)
 {
-    struct example_vm* vm = (struct example_vm*)instance;
+    example_vm* vm = (example_vm*)instance;
     if (strcmp(name, "verbose") == 0)
     {
         if (!value)
@@ -65,19 +63,19 @@ static enum evmc_set_option_result set_option(struct evmc_vm* instance,
 
 /// The implementation of the evmc_result::release() method that frees
 /// the output buffer attached to the result object.
-static void free_result_output_data(const struct evmc_result* result)
+static void free_result_output_data(const evmc_result* result)
 {
     free((uint8_t*)result->output_data);
 }
 
 /// The example implementation of the evmc_vm::execute() method.
-static struct evmc_result execute(struct evmc_vm* instance,
-                                  const struct evmc_host_interface* host,
-                                  struct evmc_host_context* context,
-                                  enum evmc_revision rev,
-                                  const struct evmc_message* msg,
-                                  const uint8_t* code,
-                                  size_t code_size)
+static evmc_result execute(evmc_vm* instance,
+                           const evmc_host_interface* host,
+                           evmc_host_context* context,
+                           enum evmc_revision rev,
+                           const evmc_message* msg,
+                           const uint8_t* code,
+                           size_t code_size)
 {
     evmc_result ret = {};
     ret.status_code = EVMC_INTERNAL_ERROR;
@@ -93,7 +91,7 @@ static struct evmc_result execute(struct evmc_vm* instance,
         return ret;
     }
 
-    struct example_vm* vm = (struct example_vm*)instance;
+    example_vm* vm = (example_vm*)instance;
 
     // Simulate executing by checking for some code patterns.
     // Solidity inline assembly is used in the examples instead of EVM bytecode.
@@ -150,7 +148,7 @@ static struct evmc_result execute(struct evmc_vm* instance,
     else if (code_size == (sizeof(return_block_number) - 1) &&
              strncmp((const char*)code, return_block_number, code_size) == 0)
     {
-        const struct evmc_tx_context tx_context = host->get_tx_context(context);
+        const evmc_tx_context tx_context = host->get_tx_context(context);
         const size_t output_size = 20;
 
         uint8_t* output_data = (uint8_t*)calloc(1, output_size);
@@ -165,7 +163,7 @@ static struct evmc_result execute(struct evmc_vm* instance,
     else if (code_size == (sizeof(save_return_block_number) - 1) &&
              strncmp((const char*)code, save_return_block_number, code_size) == 0)
     {
-        const struct evmc_tx_context tx_context = host->get_tx_context(context);
+        const evmc_tx_context tx_context = host->get_tx_context(context);
         const size_t output_size = 20;
 
         // Store block number.
@@ -188,7 +186,7 @@ static struct evmc_result execute(struct evmc_vm* instance,
     else if (code_size == (sizeof(make_a_call) - 1) &&
              strncmp((const char*)code, make_a_call, code_size) == 0)
     {
-        struct evmc_message call_msg;
+        evmc_message call_msg;
         memset(&call_msg, 0, sizeof(call_msg));
         call_msg.kind = EVMC_CALL;
         call_msg.depth = msg->depth + 1;
@@ -219,7 +217,7 @@ example_vm::example_vm()
             ::execute,        ::get_capabilities, ::set_option}
 {}
 
-struct evmc_vm* evmc_create_example_vm()
+evmc_vm* evmc_create_example_vm()
 {
     return new example_vm;
 }
