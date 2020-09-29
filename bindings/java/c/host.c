@@ -56,6 +56,7 @@ static bool account_exists_fn(struct evmc_host_context* context, const evmc_addr
 
     // call java method
     jint jresult = (*jenv)->CallStaticIntMethod(jenv, host_class, method, context->index, jaddress);
+    // FIXME: release jaddress?
     return jresult != 0;
 }
 
@@ -89,6 +90,7 @@ static evmc_bytes32 get_storage_fn(struct evmc_host_context* context,
     assert(jresult != NULL);
     evmc_bytes32* result_ptr = (struct evmc_bytes32*)(*jenv)->GetDirectBufferAddress(jenv, jresult);
     assert(result_ptr != NULL);
+    // FIXME: release jaddress and jkey?
     return *result_ptr;  // copy here
 }
 
@@ -120,6 +122,7 @@ static enum evmc_storage_status set_storage_fn(struct evmc_host_context* context
     // call java method
     jint jresult = (*jenv)->CallStaticIntMethod(jenv, host_class, method, context->index, jaddress,
                                                 jkey, jval);
+    // FIXME: release jaddress, jkey, jval?
     return (enum evmc_storage_status)jresult;
 }
 
@@ -179,6 +182,7 @@ static size_t get_code_size_fn(struct evmc_host_context* context, const evmc_add
 
     // call java method
     jint jresult = (*jenv)->CallStaticIntMethod(jenv, host_class, method, context->index, jaddress);
+    // FIXME: release jaddress?
     return (size_t)jresult;
 }
 
@@ -284,6 +288,7 @@ static void selfdestruct_fn(struct evmc_host_context* context,
 
     // call java method
     (*jenv)->CallStaticIntMethod(jenv, host_class, method, context->index, jaddress, jbeneficiary);
+    // FIXME: release jaddress and jbeneficiary?
 }
 
 static struct evmc_result call_fn(struct evmc_host_context* context, const struct evmc_message* msg)
@@ -411,6 +416,7 @@ static void emit_log_fn(struct evmc_host_context* context,
     // call java method
     (*jenv)->CallStaticIntMethod(jenv, host_class, method, context->index, jaddress, jdata,
                                  data_size, jtopics, topics_count);
+    // FIXME: release jaddress and jdata?
 }
 
 const struct evmc_host_interface* evmc_java_get_host_interface()
