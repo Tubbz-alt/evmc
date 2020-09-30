@@ -9,7 +9,6 @@ target_link_libraries(example-vm PRIVATE evmc::evmc)
 
 add_library(example-vm-static STATIC example_vm.cpp example_vm.h)
 add_library(evmc::example-vm-static ALIAS example-vm-static)
-target_compile_features(example-vm-static PRIVATE cxx_std_11)
 target_link_libraries(example-vm-static PRIVATE evmc::evmc)
 
 set_source_files_properties(example_vm.cpp PROPERTIES

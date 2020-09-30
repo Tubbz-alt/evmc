@@ -5,9 +5,10 @@
 /// @file
 /// Example implementation of the EVMC VM interface.
 ///
-/// This VM does not do anything useful except for showing how EVMC VM API
-/// should be implemented. The implementation uses the C API directly
-/// and is done in simple C++ for readability.
+/// This VM implement a subset of EMV instructions in simplistic, incorrect and unsafe way.
+/// Yet, it is capable of coping with some example EVM bytecode inputs, what is very useful
+/// in integration testing. The implementation is done in simple C++ for readability and uses
+/// pure C API and some C helpers.
 
 #include "example_vm.h"
 #include <evmc/evmc.h>
