@@ -55,12 +55,9 @@ evmc::result execute_in_example_vm(int64_t gas,
 
 TEST(example_vm, return_address)
 {
-    // Assembly: `{ mstore(0, address()) return(0, msize()) }`.
-    //    constexpr auto return_address = "\x30\x60\x00\x52\x59\x60\x00\xf3";
-    //        constexpr auto return_address = "\x30\x60\x00";
-
-    const auto r = execute_in_example_vm(20, "306000", "");
+    // Assembly: `{ mstore(0, address()) return(12, 20) }`.
+    const auto r = execute_in_example_vm(6, "306000526014600cf3", "");
     EXPECT_EQ(r.status_code, EVMC_SUCCESS);
-    EXPECT_EQ(r.gas_left, 18);
+    EXPECT_EQ(r.gas_left, 0);
     EXPECT_EQ(r, ExpectedOutput("000000000000000000000000000000000000000d"));
 }

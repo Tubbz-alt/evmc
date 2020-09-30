@@ -11,6 +11,7 @@
 
 #include "example_vm.h"
 #include <evmc/evmc.hpp>
+#include <evmc/helpers.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -85,41 +86,62 @@ static evmc_result execute(evmc_vm* instance,
     evmc::uint256be stack[1024];
     evmc::uint256be* sp = stack;
 
-//    uint8_t memory[1024] = {};
+    uint8_t memory[1024] = {};
 
     for (size_t pc = 0; pc < code_size; pc++)
     {
         // Check remaining gas, assume each instruction costs 1.
         ret.gas_left -= 1;
         if (ret.gas_left < 0)
-        {
-            ret.status_code = EVMC_OUT_OF_GAS;
-            return ret;
-        }
+            return evmc_make_result(EVMC_OUT_OF_GAS, 0, nullptr, 0);
 
         switch (code[pc])
         {
         default:
-            ret.status_code = EVMC_UNDEFINED_INSTRUCTION;
-            return ret;
+            return evmc_make_result(EVMC_UNDEFINED_INSTRUCTION, 0, nullptr, 0);
 
         case 0x00:  // STOP
-            ret.status_code = EVMC_SUCCESS;
-            return ret;
+            return evmc_make_result(EVMC_SUCCESS, ret.gas_left, nullptr, 0);
 
         case 0x30:  // ADDRESS
-            *sp = {};
-            std::memcpy(&sp->bytes[12], msg->destination.bytes, sizeof(msg->destination.bytes));
+        {
+            evmc_address address = msg->destination;
+            evmc_uint256be value = {};
+            std::memcpy(&value.bytes[12], address.bytes, sizeof(address.bytes));
+            *sp = value;
             sp++;
             break;
+        }
 
-        case 0x52:  //
+        case 0x52:  // MSTORE
+        {
+            sp--;
+            uint8_t index = sp->bytes[31];
+            sp--;
+            evmc::uint256be value = *sp;
+            std::memcpy(&memory[index], value.bytes, sizeof(value.bytes));
+            break;
+        }
 
         case 0x60:  // PUSH1
-            *sp = evmc::uint256be{code[pc + 1]};
-            sp++;
+        {
+            uint8_t byte = code[pc + 1];
             pc++;
+            evmc::uint256be value = {};
+            value.bytes[31] = byte;
+            *sp = value;
+            sp++;
             break;
+        }
+
+        case 0xf3:  // RETURN
+        {
+            sp--;
+            uint8_t index = sp->bytes[31];
+            sp--;
+            uint8_t size = sp->bytes[31];
+            return evmc_make_result(EVMC_SUCCESS, ret.gas_left, &memory[index], size);
+        }
         }
     }
 
