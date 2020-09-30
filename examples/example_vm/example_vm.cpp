@@ -33,7 +33,7 @@ static void destroy(evmc_vm* vm)
 /// The example implementation of the evmc_vm::get_capabilities() method.
 static evmc_capabilities_flagset get_capabilities(evmc_vm* /*instance*/)
 {
-    return EVMC_CAPABILITY_EVM1 | EVMC_CAPABILITY_EWASM;
+    return EVMC_CAPABILITY_EVM1;
 }
 
 /// Example VM options.
@@ -45,7 +45,7 @@ static enum evmc_set_option_result set_option(evmc_vm* instance,
                                               const char* value)
 {
     example_vm* vm = static_cast<example_vm*>(instance);
-    if (strcmp(name, "verbose") == 0)
+    if (std::strcmp(name, "verbose") == 0)
     {
         if (value == nullptr)
             return EVMC_SET_OPTION_INVALID_VALUE;
