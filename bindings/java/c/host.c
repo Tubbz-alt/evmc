@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "host.h"
 
@@ -222,9 +223,8 @@ static size_t copy_code_fn(struct evmc_host_context* context,
                            uint8_t* buffer_data,
                            size_t buffer_size)
 {
-    (void)buffer_size;  // FIXME: buffer_size suspiciously unused.
     const char java_method_name[] = "copy_code";
-    const char java_method_signature[] = "(I[BI)Ljava/nio/ByteBuffer;";
+    const char java_method_signature[] = "(I[BII)Ljava/nio/ByteBuffer;";
 
     assert(context != NULL);
     JNIEnv* jenv = attach();
@@ -248,15 +248,15 @@ static size_t copy_code_fn(struct evmc_host_context* context,
     assert(jresult != NULL);
 
     // copy jresult back to buffer_data
-    buffer_data = (uint8_t*)(*jenv)->GetDirectBufferAddress(jenv, jresult);
-    (void)buffer_data;
-    assert(buffer_data != NULL);
+    uint8_t* result = (uint8_t*)(*jenv)->GetDirectBufferAddress(jenv, jresult);
+    assert(result != NULL);
+    size_t result_size = (size_t)(*jenv)->GetDirectBufferCapacity(jenv, jresult);
 
-    size_t result = get_code_size_fn(context, address) - code_offset;
+    memcpy(buffer_data, result, result_size);
 
     (*jenv)->ReleaseByteArrayElements(jenv, jaddress, (jbyte*)address, 0);
 
-    return result;
+    return result_size;
 }
 
 static void selfdestruct_fn(struct evmc_host_context* context,
