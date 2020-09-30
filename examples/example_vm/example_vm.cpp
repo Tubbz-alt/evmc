@@ -103,6 +103,20 @@ static evmc_result execute(evmc_vm* instance,
         case 0x00:  // STOP
             return evmc_make_result(EVMC_SUCCESS, ret.gas_left, nullptr, 0);
 
+        case 0x01:  // ADD
+        {
+            sp--;
+            uint8_t a = sp->bytes[31];
+            sp--;
+            uint8_t b = sp->bytes[31];
+            uint8_t sum = static_cast<uint8_t>(a + b);
+            evmc_uint256be value = {};
+            value.bytes[31] = sum;
+            *sp = value;
+            sp++;
+            break;
+        }
+
         case 0x30:  // ADDRESS
         {
             evmc_address address = msg->destination;
@@ -120,6 +134,26 @@ static evmc_result execute(evmc_vm* instance,
             sp--;
             evmc::uint256be value = *sp;
             std::memcpy(&memory[index], value.bytes, sizeof(value.bytes));
+            break;
+        }
+
+        case 0x54:  // SLOAD
+        {
+            sp--;
+            evmc::uint256be index = *sp;
+            evmc::uint256be value = host->get_storage(context, &msg->destination, &index);
+            *sp = value;
+            sp++;
+            break;
+        }
+
+        case 0x55:  // SSTORE
+        {
+            sp--;
+            evmc::uint256be index = *sp;
+            sp--;
+            evmc::uint256be value = *sp;
+            host->set_storage(context, &msg->destination, &index, &value);
             break;
         }
 

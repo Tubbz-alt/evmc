@@ -4,9 +4,12 @@
 
 #include "../../examples/example_vm/example_vm.h"
 #include <evmc/evmc.hpp>
+#include <evmc/mocked_host.hpp>
 #include <tools/utils/utils.hpp>
 #include <gtest/gtest.h>
 #include <cstring>
+
+using namespace evmc::literals;
 
 namespace
 {
@@ -25,39 +28,56 @@ struct ExpectedOutput
 
 auto vm = evmc::VM{evmc_create_example_vm()};
 
-evmc::result execute_in_example_vm(int64_t gas,
-                                   const uint8_t* code,
-                                   size_t code_size,
-                                   const uint8_t* input,
-                                   size_t input_size) noexcept
+class example_vm : public testing::Test
 {
-    using namespace evmc::literals;
+protected:
+    evmc::MockedHost host;
 
     evmc_message msg{};
-    msg.gas = gas;
-    msg.sender = 0x0000000000000000000000000000000000000005_address;
-    msg.destination = 0x000000000000000000000000000000000000000d_address;
-    msg.input_data = input;
-    msg.input_size = input_size;
 
-    return vm.execute(EVMC_FRONTIER, msg, code, code_size);
-}
+    example_vm() noexcept
+    {
+        msg.sender = 0x5000000000000000000000000000000000000005_address;
+        msg.destination = 0xd00000000000000000000000000000000000000d_address;
+    }
 
-evmc::result execute_in_example_vm(int64_t gas,
-                                   const char* code_hex,
-                                   const char* input_hex = "") noexcept
-{
-    const auto code = evmc::from_hex(code_hex);
-    const auto input = evmc::from_hex(input_hex);
-    return execute_in_example_vm(gas, code.data(), code.size(), input.data(), input.size());
-}
+    evmc::result execute_in_example_vm(int64_t gas,
+                                       const char* code_hex,
+                                       const char* input_hex = "") noexcept
+    {
+        const auto code = evmc::from_hex(code_hex);
+        const auto input = evmc::from_hex(input_hex);
+
+        msg.gas = gas;
+        msg.input_data = input.data();
+        msg.input_size = input.size();
+
+        return vm.execute(host, EVMC_FRONTIER, msg, code.data(), code.size());
+    }
+};
+
+
 }  // namespace
 
-TEST(example_vm, return_address)
+TEST_F(example_vm, return_address)
 {
     // Assembly: `{ mstore(0, address()) return(12, 20) }`.
     const auto r = execute_in_example_vm(6, "306000526014600cf3", "");
     EXPECT_EQ(r.status_code, EVMC_SUCCESS);
     EXPECT_EQ(r.gas_left, 0);
-    EXPECT_EQ(r, ExpectedOutput("000000000000000000000000000000000000000d"));
+    EXPECT_EQ(r, ExpectedOutput("d00000000000000000000000000000000000000d"));
+}
+
+TEST_F(example_vm, counter_in_storage)
+{
+    // Assembly: `{ sstore(0, add(sload(0), 1)) }`
+
+    auto& storage_value = host.accounts[msg.destination].storage[{}].value;
+    storage_value = 0x00000000000000000000000000000000000000000000000000000000000000bb_bytes32;
+    const auto r = execute_in_example_vm(6, "600160005401600055", "");
+    EXPECT_EQ(r.status_code, EVMC_SUCCESS);
+    EXPECT_EQ(r.gas_left, 0);
+    EXPECT_EQ(r, ExpectedOutput(""));
+    EXPECT_EQ(storage_value,
+              0x00000000000000000000000000000000000000000000000000000000000000bc_bytes32);
 }
