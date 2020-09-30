@@ -10,6 +10,7 @@
 /// and is done in simple C++ for readability.
 
 #include "example_vm.h"
+#include <evmc/evmc.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -79,6 +80,53 @@ static evmc_result execute(evmc_vm* instance,
 {
     evmc_result ret = {};
     ret.status_code = EVMC_INTERNAL_ERROR;
+    ret.gas_left = msg->gas;
+
+    evmc::uint256be stack[1024];
+    evmc::uint256be* sp = stack;
+
+//    uint8_t memory[1024] = {};
+
+    for (size_t pc = 0; pc < code_size; pc++)
+    {
+        // Check remaining gas, assume each instruction costs 1.
+        ret.gas_left -= 1;
+        if (ret.gas_left < 0)
+        {
+            ret.status_code = EVMC_OUT_OF_GAS;
+            return ret;
+        }
+
+        switch (code[pc])
+        {
+        default:
+            ret.status_code = EVMC_UNDEFINED_INSTRUCTION;
+            return ret;
+
+        case 0x00:  // STOP
+            ret.status_code = EVMC_SUCCESS;
+            return ret;
+
+        case 0x30:  // ADDRESS
+            *sp = {};
+            std::memcpy(&sp->bytes[12], msg->destination.bytes, sizeof(msg->destination.bytes));
+            sp++;
+            break;
+
+        case 0x52:  //
+
+        case 0x60:  // PUSH1
+            *sp = evmc::uint256be{code[pc + 1]};
+            sp++;
+            pc++;
+            break;
+        }
+    }
+
+    ret.status_code = EVMC_SUCCESS;
+    return ret;
+
+
     if (code_size == 0)
     {
         // In case of empty code return a fancy error message.
