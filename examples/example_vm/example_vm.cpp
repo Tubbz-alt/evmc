@@ -10,7 +10,7 @@
 /// and is done in simple C++ for readability.
 
 #include "example_vm.h"
-#include <evmc/evmc.hpp>
+#include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <cstdio>
 #include <cstdlib>
@@ -63,13 +63,6 @@ static enum evmc_set_option_result set_option(evmc_vm* instance,
     return EVMC_SET_OPTION_INVALID_NAME;
 }
 
-/// The implementation of the evmc_result::release() method that frees
-/// the output buffer attached to the result object.
-static void free_result_output_data(const evmc_result* result)
-{
-    free((uint8_t*)result->output_data);
-}
-
 /// The example implementation of the evmc_vm::execute() method.
 static evmc_result execute(evmc_vm* instance,
                            const evmc_host_interface* host,
@@ -79,20 +72,23 @@ static evmc_result execute(evmc_vm* instance,
                            const uint8_t* code,
                            size_t code_size)
 {
-    evmc_result ret = {};
-    ret.status_code = EVMC_INTERNAL_ERROR;
-    ret.gas_left = msg->gas;
+    example_vm* vm = static_cast<example_vm*>(instance);
 
-    evmc::uint256be stack[1024];
-    evmc::uint256be* sp = stack;
+    if (vm->verbose > 0)
+        std::puts("execution started\n");
+
+    int64_t gas_left = msg->gas;
+
+    evmc_uint256be stack[1024];
+    evmc_uint256be* sp = stack;
 
     uint8_t memory[1024] = {};
 
     for (size_t pc = 0; pc < code_size; pc++)
     {
         // Check remaining gas, assume each instruction costs 1.
-        ret.gas_left -= 1;
-        if (ret.gas_left < 0)
+        gas_left -= 1;
+        if (gas_left < 0)
             return evmc_make_result(EVMC_OUT_OF_GAS, 0, nullptr, 0);
 
         switch (code[pc])
@@ -101,7 +97,7 @@ static evmc_result execute(evmc_vm* instance,
             return evmc_make_result(EVMC_UNDEFINED_INSTRUCTION, 0, nullptr, 0);
 
         case 0x00:  // STOP
-            return evmc_make_result(EVMC_SUCCESS, ret.gas_left, nullptr, 0);
+            return evmc_make_result(EVMC_SUCCESS, gas_left, nullptr, 0);
 
         case 0x01:  // ADD
         {
@@ -127,12 +123,21 @@ static evmc_result execute(evmc_vm* instance,
             break;
         }
 
+        case 0x43:  // NUMBER
+        {
+            evmc_uint256be value = {};
+            value.bytes[31] = static_cast<uint8_t>(host->get_tx_context(context).block_number);
+            *sp = value;
+            sp++;
+            break;
+        }
+
         case 0x52:  // MSTORE
         {
             sp--;
             uint8_t index = sp->bytes[31];
             sp--;
-            evmc::uint256be value = *sp;
+            evmc_uint256be value = *sp;
             std::memcpy(&memory[index], value.bytes, sizeof(value.bytes));
             break;
         }
@@ -140,8 +145,8 @@ static evmc_result execute(evmc_vm* instance,
         case 0x54:  // SLOAD
         {
             sp--;
-            evmc::uint256be index = *sp;
-            evmc::uint256be value = host->get_storage(context, &msg->destination, &index);
+            evmc_uint256be index = *sp;
+            evmc_uint256be value = host->get_storage(context, &msg->destination, &index);
             *sp = value;
             sp++;
             break;
@@ -150,9 +155,9 @@ static evmc_result execute(evmc_vm* instance,
         case 0x55:  // SSTORE
         {
             sp--;
-            evmc::uint256be index = *sp;
+            evmc_uint256be index = *sp;
             sp--;
-            evmc::uint256be value = *sp;
+            evmc_uint256be value = *sp;
             host->set_storage(context, &msg->destination, &index, &value);
             break;
         }
@@ -161,7 +166,7 @@ static evmc_result execute(evmc_vm* instance,
         {
             uint8_t byte = code[pc + 1];
             pc++;
-            evmc::uint256be value = {};
+            evmc_uint256be value = {};
             value.bytes[31] = byte;
             *sp = value;
             sp++;
@@ -174,137 +179,24 @@ static evmc_result execute(evmc_vm* instance,
             uint8_t index = sp->bytes[31];
             sp--;
             uint8_t size = sp->bytes[31];
-            return evmc_make_result(EVMC_SUCCESS, ret.gas_left, &memory[index], size);
+            return evmc_make_result(EVMC_SUCCESS, gas_left, &memory[index], size);
         }
-        }
-    }
 
-    ret.status_code = EVMC_SUCCESS;
-    return ret;
-
-
-    if (code_size == 0)
-    {
-        // In case of empty code return a fancy error message.
-        const char* error = rev == EVMC_BYZANTIUM ? "Welcome to Byzantium!" : "Hello Ethereum!";
-        ret.output_data = (const uint8_t*)error;
-        ret.output_size = strlen(error);
-        ret.status_code = EVMC_FAILURE;
-        ret.gas_left = msg->gas / 10;
-        ret.release = nullptr;  // We don't need to release the constant messages.
-        return ret;
-    }
-
-    example_vm* vm = static_cast<example_vm*>(instance);
-
-    // Simulate executing by checking for some code patterns.
-    // Solidity inline assembly is used in the examples instead of EVM bytecode.
-
-    // Assembly: `{ mstore(0, address()) return(0, msize()) }`.
-    const char return_address[] = "\x30\x60\x00\x52\x59\x60\x00\xf3";
-
-    // Assembly: `{ sstore(0, add(sload(0), 1)) }`
-    const char counter[] = "\x60\x01\x60\x00\x54\x01\x60\x00\x55";
-
-    // Assembly: `{ mstore(0, number()) return(0, msize()) }`
-    const char return_block_number[] = "\x43\x60\x00\x52\x59\x60\x00\xf3";
-
-    // Assembly: `{ sstore(0, number()) mstore(0, number()) return(0, msize()) }`
-    const char save_return_block_number[] = "\x43\x60\x00\x55\x43\x60\x00\x52\x59\x60\x00\xf3";
-
-    // Assembly: PUSH(0) 6x DUP1 CALL
-    const char make_a_call[] = "\x60\x00\x80\x80\x80\x80\x80\x80\xf1";
-
-    if (msg->kind == EVMC_CREATE)
-    {
-        ret.status_code = EVMC_SUCCESS;
-        ret.gas_left = msg->gas / 10;
-        return ret;
-    }
-    else if (code_size == (sizeof(return_address) - 1) &&
-             strncmp((const char*)code, return_address, code_size) == 0)
-    {
-        static const size_t address_size = sizeof(msg->destination);
-        uint8_t* output_data = (uint8_t*)malloc(address_size);
-        if (!output_data)
+        case 0xfd:  // REVERT
         {
-            // malloc failed, report internal error.
-            ret.status_code = EVMC_INTERNAL_ERROR;
-            return ret;
+            if (rev < EVMC_BYZANTIUM)
+                return evmc_make_result(EVMC_UNDEFINED_INSTRUCTION, 0, nullptr, 0);
+
+            sp--;
+            uint8_t index = sp->bytes[31];
+            sp--;
+            uint8_t size = sp->bytes[31];
+            return evmc_make_result(EVMC_REVERT, gas_left, &memory[index], size);
         }
-        memcpy(output_data, &msg->destination, address_size);
-        ret.status_code = EVMC_SUCCESS;
-        ret.output_data = output_data;
-        ret.output_size = address_size;
-        ret.release = &free_result_output_data;
-        return ret;
-    }
-    else if (code_size == (sizeof(counter) - 1) &&
-             strncmp((const char*)code, counter, code_size) == 0)
-    {
-        const evmc_bytes32 key = {{0}};
-        evmc_bytes32 value = host->get_storage(context, &msg->destination, &key);
-        value.bytes[31]++;
-        host->set_storage(context, &msg->destination, &key, &value);
-        ret.status_code = EVMC_SUCCESS;
-        return ret;
-    }
-    else if (code_size == (sizeof(return_block_number) - 1) &&
-             strncmp((const char*)code, return_block_number, code_size) == 0)
-    {
-        const evmc_tx_context tx_context = host->get_tx_context(context);
-        const size_t output_size = 20;
-
-        uint8_t* output_data = (uint8_t*)calloc(1, output_size);
-        snprintf((char*)output_data, output_size, "%u", (unsigned)tx_context.block_number);
-        ret.status_code = EVMC_SUCCESS;
-        ret.gas_left = msg->gas / 2;
-        ret.output_data = output_data;
-        ret.output_size = output_size;
-        ret.release = &free_result_output_data;
-        return ret;
-    }
-    else if (code_size == (sizeof(save_return_block_number) - 1) &&
-             strncmp((const char*)code, save_return_block_number, code_size) == 0)
-    {
-        const evmc_tx_context tx_context = host->get_tx_context(context);
-        const size_t output_size = 20;
-
-        // Store block number.
-        const evmc_bytes32 key = {{0}};
-        evmc_bytes32 value = {{0}};
-        // NOTE: assume block number is <= 255
-        value.bytes[31] = (uint8_t)tx_context.block_number;
-        host->set_storage(context, &msg->destination, &key, &value);
-
-        // Return block number.
-        uint8_t* output_data = (uint8_t*)calloc(1, output_size);
-        snprintf((char*)output_data, output_size, "%u", (unsigned)tx_context.block_number);
-        ret.status_code = EVMC_SUCCESS;
-        ret.gas_left = msg->gas / 2;
-        ret.output_data = output_data;
-        ret.output_size = output_size;
-        ret.release = &free_result_output_data;
-        return ret;
-    }
-    else if (code_size == (sizeof(make_a_call) - 1) &&
-             strncmp((const char*)code, make_a_call, code_size) == 0)
-    {
-        evmc_message call_msg{};
-        call_msg.kind = EVMC_CALL;
-        call_msg.depth = msg->depth + 1;
-        call_msg.gas = msg->gas - (msg->gas / 64);
-        call_msg.sender = msg->destination;
-        return host->call(context, &call_msg);
+        }
     }
 
-    ret.status_code = EVMC_FAILURE;
-    ret.gas_left = 0;
-
-    if (vm->verbose)
-        printf("Execution done.\n");
-
-    return ret;
+    return evmc_make_result(EVMC_SUCCESS, gas_left, nullptr, 0);
 }
 
 
